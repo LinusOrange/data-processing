@@ -1,0 +1,43 @@
+{
+  "file_path": "./3.17筛选后数据.xlsx",
+  "sheet_name": 0,
+  "output_dir": "./outputs",
+  "id_col": "firm_id",
+  "time_col": "year",
+  "dependent_var": "Y",
+  "main_independent_var": "Media",
+  "mediator_var": "SA",
+  "moderator_var": "ROA",
+  "controls": ["Size", "Lev", "Growth"],
+  "numeric_columns": ["year", "Y", "Media", "SA", "ROA", "Size", "Lev", "Growth"],
+  "dropna_subset": ["firm_id", "year", "Y", "Media"],
+  "winsorize": {
+    "enabled": true,
+    "columns": ["Y", "Media", "SA", "ROA", "Size", "Lev", "Growth"],
+    "lower": 0.01,
+    "upper": 0.99,
+    "by_time": true
+  },
+  "cleaning": {
+    "drop_duplicates": true,
+    "sort": true
+  },
+  "subgroup": {
+    "enabled": true,
+    "column": "Property",
+    "groups": [0, 1]
+  },
+  "robustness": {
+    "enabled": true,
+    "models": [
+      {
+        "name": "alt_y",
+        "dependent_var": "Y_alt"
+      },
+      {
+        "name": "lag_media",
+        "lag_main_independent_var": 1
+      }
+    ]
+  }
+}
