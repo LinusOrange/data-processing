@@ -2,18 +2,38 @@
   "file_path": "./3.17筛选后数据.xlsx",
   "sheet_name": 0,
   "output_dir": "./outputs",
-  "id_col": "firm_id",
+  "id_col": "id",
   "time_col": "year",
-  "dependent_var": "Y",
+  "dependent_var": "CrashRisk",
   "main_independent_var": "Media",
   "mediator_var": "SA",
   "moderator_var": "ROA",
-  "controls": ["Size", "Lev", "Growth"],
-  "numeric_columns": ["year", "Y", "Media", "SA", "ROA", "Size", "Lev", "Growth"],
-  "dropna_subset": ["firm_id", "year", "Y", "Media"],
+  "controls": [
+    "Size",
+    "Lev",
+    "Inst",
+    "Dual",
+    "TopMgmtSize",
+    "Turnover",
+    "FirmAge",
+    "ESG"
+  ],
+  "dropna_subset": ["id", "year", "CrashRisk", "Media"],
   "winsorize": {
     "enabled": true,
-    "columns": ["Y", "Media", "SA", "ROA", "Size", "Lev", "Growth"],
+    "columns": [
+      "CrashRisk",
+      "Media",
+      "SA",
+      "ROA",
+      "Size",
+      "Lev",
+      "Inst",
+      "TopMgmtSize",
+      "Turnover",
+      "FirmAge",
+      "ESG"
+    ],
     "lower": 0.01,
     "upper": 0.99,
     "by_time": true
@@ -21,6 +41,10 @@
   "cleaning": {
     "drop_duplicates": true,
     "sort": true
+  },
+  "regression": {
+    "cov_type": "cluster",
+    "cluster_col": "id"
   },
   "subgroup": {
     "enabled": true,
@@ -31,13 +55,35 @@
     "enabled": true,
     "models": [
       {
-        "name": "alt_y",
-        "dependent_var": "Y_alt"
+        "name": "alt_duvol",
+        "dependent_var": "CrashRisk_DUVOL"
       },
       {
         "name": "lag_media",
         "lag_main_independent_var": 1
       }
     ]
+  },
+  "variable_aliases": {
+    "CrashRisk": "NCSKEW综合市场总市值平均法",
+    "CrashRisk_DUVOL": "DUVOL综合市场总市值平均法",
+    "Media": "管理层中女性成员占比",
+    "ROA": "总资产净利润率ROAA",
+    "Size": "企业规模",
+    "Lev": "资产负债率",
+    "Inst": "机构投资者持股比例",
+    "Dual": "两职合一",
+    "TopMgmtSize": "董监高对数",
+    "Turnover": "年换手率总股数对数",
+    "FirmAge": "企业年龄",
+    "ESG": "ESG得分年均值",
+    "Property": "产权性质",
+    "id": "id",
+    "year": "year"
+  },
+  "derived_variables": {
+    "SA": {
+      "formula": "-0.737 * Size + 0.043 * Size * Size - 0.040 * FirmAge"
+    }
   }
 }
