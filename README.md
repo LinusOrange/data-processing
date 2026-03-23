@@ -1,6 +1,6 @@
 # 面板数据实证分析脚本
 
-这个仓库现在提供了一个可直接改配置后运行的 Python 分析脚本，用来完成你提到的整套实证流程：
+这个仓库现在包含一个**不依赖 pandas / numpy / scipy / statsmodels** 的纯 Python 分析脚本，可以直接读取 `3.17筛选后数据.xlsx` 并完成以下流程：
 
 1. 导入数据 + 清洗
 2. 缩尾（winsorize）
@@ -11,138 +11,110 @@
 7. 调节效应（Media × ROA）
 8. 分组回归 + 稳健性检验
 
-## 重要说明
+## 当前默认口径
 
-我当前无法直接访问你 IDE 里提到的 Windows 本地路径：
+脚本已经按当前 Excel 数据做了默认映射：
 
-`C:\Users\58452\OneDrive\研究生工作\3.17筛选后数据.xlsx`
+- `id_col`：`id`
+- `time_col`：`year`
+- `dependent_var`：`CrashRisk` → `NCSKEW综合市场总市值平均法`
+- `main_independent_var`：`Media` → `管理层中女性成员占比`
+- `mediator_var`：`SA` → 按公式推导的融资约束指标
+- `moderator_var`：`ROA` → `总资产净利润率ROAA`
+- 分组变量：`Property` → `产权性质`
+- 稳健性：
+  - 替换被解释变量为 `CrashRisk_DUVOL` → `DUVOL综合市场总市值平均法`
+  - 使用 `Media` 的一期滞后项
 
-因此，我已经把代码写成了**可直接读取 Excel 的通用分析流水线**。你只需要把 Excel 文件复制到当前仓库目录，或在配置文件里把 `file_path` 改成仓库内的实际路径，就可以一键跑出结果。
+> `SA` 在原始 Excel 中不存在，脚本会根据配置里的公式自动生成：
+>
+> `SA = -0.737 * Size + 0.043 * Size^2 - 0.040 * FirmAge`
 
-## 文件说明
-
-- `analysis_pipeline.py`：主分析脚本。
-- `config.template.json`：配置模板，请按你的真实变量名修改。
-
-## 安装依赖
-
-建议使用 Python 3.10+。
-
-```bash
-pip install pandas numpy scipy statsmodels openpyxl
-```
-
-## 使用步骤
-
-### 1）准备数据
-
-把 Excel 文件放到仓库根目录，例如：
-
-```text
-/workspace/data-processing/3.17筛选后数据.xlsx
-```
-
-### 2）修改配置
-
-复制模板：
+## 直接运行
 
 ```bash
-cp config.template.json config.json
+python analysis_pipeline.py
 ```
 
-然后按你的数据真实列名修改这些字段：
-
-- `id_col`：企业/个体 ID
-- `time_col`：年份
-- `dependent_var`：被解释变量
-- `main_independent_var`：核心解释变量（例如 `Media`）
-- `mediator_var`：中介变量（例如 `SA`）
-- `moderator_var`：调节变量（例如 `ROA`）
-- `controls`：控制变量列表
-- `subgroup.column`：分组变量
-- `robustness.models`：稳健性检验设定
-
-### 3）运行脚本
+如果你想自己调整变量映射：
 
 ```bash
-python analysis_pipeline.py --config config.json
+python analysis_pipeline.py --config config.template.json
 ```
 
-## 输出结果
+## 输出文件
 
-程序会在 `output_dir` 指定目录下生成：
+运行后会在 `outputs/` 中生成：
 
-- `analysis_results.xlsx`：整合后的 Excel 结果文件
-- `clean_report.csv`：清洗报告
-- `descriptive_stats.csv`：描述性统计
-- `correlation.csv`：相关系数矩阵
-- `correlation_pvalues.csv`：相关系数显著性 p 值
-- `correlation_stars.csv`：带显著性星号的相关系数矩阵
-- `main_fe_summary.csv` / `main_fe_coefficients.csv`：主回归
-- `mediation_summary.csv` / `mediation_effect.csv`：中介效应
-- `moderation_summary.csv` / `moderation_coefficients.csv`：调节效应
-- `subgroup_summary.csv` / `subgroup_coefficients.csv`：分组回归
-- `robustness_summary.csv` / `robustness_coefficients.csv`：稳健性检验
+- `clean_report.csv`
+- `clean_data_preview.csv`
+- `winsorized_data_preview.csv`
+- `descriptive_stats.csv`
+- `correlation.csv`
+- `correlation_pvalues.csv`
+- `correlation_stars.csv`
+- `main_fe_summary.csv`
+- `main_fe_coefficients.csv`
+- `mediation_summary.csv`
+- `mediation_effect.csv`
+- `moderation_summary.csv`
+- `moderation_coefficients.csv`
+- `subgroup_summary.csv`
+- `subgroup_coefficients.csv`
+- `robustness_summary.csv`
+- `robustness_coefficients.csv`
 
-## 方法说明
+## 方法实现说明
 
-### 固定效应回归
+### 1. 数据读取
 
-脚本使用以下方式控制双向固定效应：
+脚本直接解析 `.xlsx` 文件底层 XML，因此在当前环境下不需要额外安装第三方包。
 
-- `C(id_col)`：个体固定效应
-- `C(time_col)`：时间固定效应
+### 2. 缩尾
 
-即使用虚拟变量形式实现：
+默认对主要变量按年份进行 1% / 99% 缩尾。
 
-```python
-Y ~ X + Controls + C(firm_id) + C(year)
-```
+### 3. 固定效应回归
 
-### 中介效应（SA）
+采用**双向固定效应去均值（entity FE + time FE）**方式估计主回归、分组回归与稳健性回归，并输出 HC1 异方差稳健标准误。
 
-脚本自动完成三步法：
+### 4. 中介效应
+
+按三步法执行：
 
 1. `Y ~ Media + Controls + FE`
 2. `SA ~ Media + Controls + FE`
 3. `Y ~ Media + SA + Controls + FE`
 
-并额外给出：
+同时输出 Sobel 检验结果。
 
-- `indirect_effect = a × b`
-- Sobel 检验统计量与 p 值
+### 5. 调节效应
 
-### 调节效应（Media × ROA）
+自动构造交互项：
 
-脚本自动构造交互项：
+`Media_x_ROA = Media * ROA`
 
-```python
-Media_x_ROA = Media * ROA
-```
+然后估计：
 
-再回归：
+`Y ~ Media + ROA + Media_x_ROA + Controls + FE`
 
-```python
-Y ~ Media + ROA + Media_x_ROA + Controls + FE
-```
+## 当前样例结果摘要
 
-### 分组回归
+基于当前 Excel 直接运行得到：
 
-按 `subgroup.column` 指定字段拆分样本，对每组分别做固定效应回归。
+- 主回归中 `Media` 系数约为 `-0.0497`，显著性不强。
+- 中介效应 `a×b` 约为 `-0.0136`，Sobel `p≈0.0557`，边际显著。
+- 调节项 `Media × ROA` 系数约为 `-1.8975`，不显著。
+- 分组回归已按 `产权性质 = 0/1` 输出。
+- 稳健性检验已输出 `DUVOL` 替代口径和 `Media` 滞后一期口径。
 
-### 稳健性检验
+## 可继续扩展
 
-模板里预置了两个例子：
+如果你后续要把变量口径改成论文中的其他定义，只需要改 `config.template.json` 的：
 
-- 更换被解释变量 `Y_alt`
-- 使用核心解释变量的滞后一期 `Media_lag1`
+- `variable_aliases`
+- `derived_variables`
+- `controls`
+- `robustness.models`
 
-你可以在 `robustness.models` 里继续扩展。
-
-## 如果你希望我继续
-
-如果你把 Excel 文件放进仓库，或者告诉我**真实列名**，我下一步可以继续帮你：
-
-1. 直接把 `config.json` 按你的变量名配好；
-2. 帮你进一步补充符合论文格式的回归表；
-3. 如果仓库里能访问到 Excel，我也可以继续帮你把真实结果跑出来。
+即可复用整套流程。
